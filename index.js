@@ -22,8 +22,7 @@ const dockerCompose = async (param, notify = true) =>{
   return result;
 }
 
-const getTable = async () => {
-  const out = await docker('ps', false);
+const outputToArray = (out) => {
   const lines = out.trim().split('\n');
   const headersLine = lines.shift();
   const headers = headersLine.split(/\s{2,}/);
@@ -37,9 +36,21 @@ const getTable = async () => {
         headers[i].toLowerCase()
       );
     })
-    .map(obj => Object.assign(obj, {
-      app: obj.names.replace(/^[^_]+_(.+)_[\d]+$/g, '$1'), // stack_admin_1 => admin
-    }))
+    .value()
+}
+
+const getTable = async () => {
+  const out = outputToArray(await docker('ps', false));
+  const stats = outputToArray(await docker('stats --no-stream', false));
+  return _(out)
+    .map(obj => {
+      const stat = stats.find(({ container }) => container === obj['container id']);
+      return Object.assign(obj, {
+        cpu: stat['cpu %'],
+        ram: stat['mem %'],
+        app: obj.names.replace(/^[^_]+_(.+)_[\d]+$/g, '$1'), // stack_admin_1 => admin
+      })
+    })
     .sortBy('app')
     .value();
 }
@@ -56,11 +67,13 @@ const makeCommand = (prg, command, text = `${command}`) => ({
 
 const generateMenu = async () => {
   const table = await getTable();
-  const conf = table.map(({ app, names, status, image }) => {
-    const tab1 = _.times(20 - app.length).map(() => ' ').join('');
-    const tab2 = _.times(40 - image.length).map(() => ' ').join('');
+  const conf = table.map(({ app, names, status, image, cpu, ram }) => {
+    const tab1 = _.times(20 - Math.min(app.length, 19)).map(() => ' ').join('');
+    const tab2 = _.times(40 - Math.min(image.length, 39)).map(() => ' ').join('');
+    const usage = `${cpu} / ${ram}`;
+    const tab3 = _.times(20 - usage.length).map(() => ' ').join('');
     return {
-      text: `${app}${tab1}${image}${tab2}${status}`,
+      text: `${app.substr(0,19)}${tab1}${image.substr(0,39)}${tab2}${usage}${tab3}${status}`,
       font: 'Courier',
       terminal: true,
       bash: nodePath,
