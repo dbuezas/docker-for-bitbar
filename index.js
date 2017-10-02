@@ -40,8 +40,10 @@ const outputToArray = (out) => {
 }
 
 const getTable = async () => {
-  const out = outputToArray(await docker('ps', false));
-  const stats = outputToArray(await docker('stats --no-stream', false));
+  const psPromise = docker('ps', false);
+  const statsPromise = docker('stats --no-stream', false);
+  const out = outputToArray(await psPromise);
+  const stats = outputToArray(await statsPromise);
   return _(out)
     .map(obj => {
       const stat = stats.find(({ container }) => container === obj['container id']);
