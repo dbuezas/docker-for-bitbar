@@ -46,10 +46,10 @@ const getTable = async () => {
   const stats = outputToArray(await statsPromise);
   return _(out)
     .map(obj => {
-      const stat = stats.find(({ container }) => container === obj['container id']);
+      const stat = stats.find(({ container }) => container === obj['container id']) || {};
       return Object.assign(obj, {
-        cpu: stat['cpu %'],
-        ram: stat['mem %'],
+        cpu: stat['cpu %'] || '??',
+        ram: stat['mem %'] || '??',
         app: obj.names.replace(/^[^_]+_(.+)_[\d]+$/g, '$1'), // stack_admin_1 => admin
       })
     })
@@ -57,8 +57,8 @@ const getTable = async () => {
     .value();
 }
 
-const makeCommand = (prg, command, text = `${command}`) => ({
-  text,
+const makeCommand = (prg, command, text = '') => ({
+  text: `${text}\t[${prg} ${command}]`,
   refresh: true,
   terminal: false,
   bash: nodePath,
