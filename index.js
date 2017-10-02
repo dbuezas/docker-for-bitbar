@@ -46,7 +46,7 @@ const getTable = async () => {
   const stats = outputToArray(await statsPromise);
   return _(out)
     .map(obj => {
-      const stat = stats.find(({ container }) => container === obj['container id']) || {};
+      const stat = _.find(stats, { container: obj['container id'] }) || {};
       return Object.assign(obj, {
         cpu: stat['cpu %'] || '??',
         ram: stat['mem %'] || '??',
@@ -67,27 +67,44 @@ const makeCommand = (prg, command, text = '') => ({
   param3: command,
 });
 
+const getTabs = (table) => {
+  const tabs = {};
+  _.forEach(table, line =>
+    _.forEach(line, (cell, name) =>
+      tabs[name] = Math.min(50, Math.max(cell.length, tabs[name] || 0))
+    )
+  );
+  return tabs;
+}
+const tab = (text, fillSpaces) => {
+  let r = text.substr(0, fillSpaces);
+  while (r.length < fillSpaces) r += ' ';
+  return r;
+};
+
+const tabulate = (tabs, line = {}) =>
+  ['app', 'image', 'cpu', 'ram', 'status']
+  .map(key => tab(line[key] || key.toUpperCase(), tabs[key]))
+  .join('  ');
+
 const generateMenu = async () => {
   const table = await getTable();
-  const conf = table.map(({ app, names, status, image, cpu, ram }) => {
-    const tab1 = _.times(20 - Math.min(app.length, 19)).map(() => ' ').join('');
-    const tab2 = _.times(40 - Math.min(image.length, 39)).map(() => ' ').join('');
-    const usage = `${cpu} / ${ram}`;
-    const tab3 = _.times(20 - usage.length).map(() => ' ').join('');
+  const tabs = getTabs(table);
+  const conf = table.map(line => {
     return {
-      text: `${app.substr(0,19)}${tab1}${image.substr(0,39)}${tab2}${usage}${tab3}${status}`,
+      text: tabulate(tabs, line),
+      size: 10,
       font: 'Courier',
       terminal: true,
       bash: `${dockerPath}/docker`,
-      param1: `logs ${names} -f`,
-      size: 10,
-      color: status.startsWith('Up') ? 'green' : 'red',
+      param1: `logs ${line.names} -f`,
+      color: line.status.startsWith('Up') ? 'green' : 'red',
       submenu: [
-        { text: app },
-        makeCommand('docker-compose', `scale ${app}=0`, 'stop'),
-        makeCommand('restart', app, '(re)start'),
-        makeCommand('docker-compose', `pull ${app}`, 'pull'),
-        makeCommand('docker-compose', `logs ${app}`, 'logs'),
+        { text: line.names },
+        makeCommand('docker-compose', `scale ${line.app}=0`, 'stop'),
+        makeCommand('restart', line.app, '(re)start'),
+        makeCommand('docker-compose', `pull ${line.app}`, 'pull'),
+        makeCommand('docker-compose', `logs ${line.app}`, 'logs'),
       ],
     };
   });
@@ -96,6 +113,13 @@ const generateMenu = async () => {
   const up = greens === 0 ? '' : `${greens}`;
   const down = reds === 0 ? '' : `❌${reds}`;
   const notLoaded = table.length > 0 ? '' : '⛔️';
+
+  const header = {
+    size: 10,
+    font: 'Courier',
+    text: tabulate(tabs),
+  }
+
   bitbar([
     { text: `🐳${up}${down}${notLoaded}`, dropdown: false },
     bitbar.sep,
@@ -107,6 +131,7 @@ const generateMenu = async () => {
     bitbar.sep,
     makeCommand('prune', '', 'Prune stack'),
     bitbar.sep,
+    header,
     ...conf,
   ]);
 }
