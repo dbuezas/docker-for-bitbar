@@ -76,11 +76,8 @@ const generateMenu = async () => {
       text: `${app.substr(0,19)}${tab1}${image.substr(0,39)}${tab2}${usage}${tab3}${status}`,
       font: 'Courier',
       terminal: true,
-      bash: nodePath,
-      param1: __filename,
-      param2: 'attach',
-      param3: app,
-      param4: names,
+      bash: `${dockerPath}/docker`,
+      param1: `logs ${names} -f`,
       size: 10,
       color: status.startsWith('Up') ? 'green' : 'red',
       submenu: [
@@ -131,29 +128,6 @@ const start = async () => {
       await docker('volume prune -f');
       await docker('image prune -f');
       break;
-    case 'term': {
-      const sh = process.argv[3];
-      console.log('---------');
-      console.log('RUNNING:');
-      console.log('---------');
-      console.log(process.argv.slice(3).join(' '));
-      const p = process.argv.slice(4);
-      require('child_process').spawn(process.argv[3], process.argv.slice(4), { cwd: dockerComposeYmlPath, stdio: 'inherit' });
-      break;
-    }
-    case 'attach': {
-      const app = process.argv[3];
-      const names = process.argv[4];
-      console.log('---------');
-      console.log('LOGS:');
-      console.log('---------');
-      console.log(await dockerCompose(`logs ${app}`, false));
-      console.log('---------');
-      console.log('ATTACH:');
-      console.log('---------');
-      require('child_process').spawn('docker', ['attach', names], { cwd: dockerComposeYmlPath, stdio: 'inherit' });
-      break;
-    }
     default:
       generateMenu();
   }
