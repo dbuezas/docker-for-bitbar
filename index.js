@@ -104,7 +104,6 @@ const generateMenu = async () => {
         makeCommand('docker-compose', `scale ${line.app}=0`, 'stop'),
         makeCommand('restart', line.app, '(re)start'),
         makeCommand('docker-compose', `pull ${line.app}`, 'pull'),
-        makeCommand('docker-compose', `logs ${line.app}`, 'logs'),
       ],
     };
   });
