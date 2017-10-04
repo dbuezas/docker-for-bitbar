@@ -1,25 +1,30 @@
-const shell = require('shellpromise');
+var { exec } = require('child_process');
 const bitbar = require('bitbar');
 const _ = require('lodash');
-const nodePath = process.argv[0];
-const { dockerComposeYmlPath, dockerPath } = require('./config');
+let dockerComposeYmlPath;
+let dockerPath;
 
-const docker = async (param, notify = true) => {
-  const result = await shell(`${dockerPath}/docker ${param}`, { cwd: dockerComposeYmlPath });
-  if (notify) {
-    const r = result.replace(/"/g, '\\"').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-    shell(`osascript -e $'tell app "System Events" to display dialog "${r}" buttons "OK" default button 1 with title "${`docker-compose ${param}`}"'`)
-  }
-  return result;
+try {
+  const config = require('./config');
+  dockerPath = config.dockerPath;
+  dockerComposeYmlPath = config.dockerComposeYmlPath;
+} catch (e) {
+  bitbar([
+    { text: `🐳 error`, dropdown: false },
+    bitbar.sep,
+    { text: `Error reading ${__dirname}/config.js` },
+    { text: `see config.example.js` },
+  ]);
+  process.exit(0);
 }
-const dockerCompose = async (param, notify = true) =>{
-  const result = await shell(`${dockerPath}/docker-compose ${param}`, { cwd: dockerComposeYmlPath });
-  // if (notify) notifier.notify({ title: `docker-compose ${param}`, message: result });
-  if (notify) {
-    const r = result.replace(/"/g, '\\"').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-    shell(`osascript -e $'tell app "System Events" to display dialog "${r}" buttons "OK" default button 1 with title "${`docker-compose ${param}`}"'`)
-  }
-  return result;
+
+const callDocker = async (param) => {
+  return new Promise((resolve, reject) => {
+    exec(`${dockerPath}/docker ${param}`, { cwd: dockerComposeYmlPath }, (err, result) => {
+      if (err) reject(err);
+      else resolve(result.toString());
+    });
+  });
 }
 
 const outputToArray = (out) => {
@@ -40,8 +45,8 @@ const outputToArray = (out) => {
 }
 
 const getTable = async () => {
-  const psPromise = docker('ps', false);
-  const statsPromise = docker('stats --no-stream', false);
+  const psPromise = callDocker('ps', false);
+  const statsPromise = callDocker('stats --no-stream', false);
   const out = outputToArray(await psPromise);
   const stats = outputToArray(await statsPromise);
   return _(out)
@@ -57,15 +62,27 @@ const getTable = async () => {
     .value();
 }
 
-const makeCommand = (prg, command, text = '') => ({
-  text: `${text}\t[${prg} ${command}]`,
-  refresh: true,
-  terminal: false,
-  bash: nodePath,
-  param1: __filename,
-  param2: prg,
-  param3: command,
-});
+const tab = (text, fillSpaces) => {
+  let r = text.substr(0, fillSpaces);
+  while (r.length < fillSpaces) r += ' ';
+  return r;
+};
+
+const makeCommand = (commands, text = '') => {
+  const command = commands.map(c => `${dockerPath}/${c}`).join(' && ');
+  let commandText = commands.join(' && ');
+  if (commandText.length > 51) {
+    commandText = `${commandText.slice(0, 25)}…${commandText.slice(-25)}`;
+  }
+  return {
+    text: `${tab(text, 70 - commandText.length)} [${commandText}]`,
+    size: 12,
+    font: 'Courier',
+    refresh: false,
+    terminal: true,
+    bash: `cd ${dockerComposeYmlPath} && ${command}`,
+  };
+}
 
 const getTabs = (table) => {
   const tabs = {};
@@ -76,11 +93,6 @@ const getTabs = (table) => {
   );
   return tabs;
 }
-const tab = (text, fillSpaces) => {
-  let r = text.substr(0, fillSpaces);
-  while (r.length < fillSpaces) r += ' ';
-  return r;
-};
 
 const tabulate = (tabs, line = {}) =>
   ['app', 'image', 'cpu', 'ram', 'status']
@@ -98,12 +110,15 @@ const generateMenu = async () => {
       terminal: true,
       bash: `${dockerPath}/docker`,
       param1: `logs ${line.names} -f`,
-      color: line.status.startsWith('Up') ? 'green' : 'red',
+      color: (line.status.startsWith('Up') && line.cpu !== '??' )? 'green' : 'red',
       submenu: [
         { text: line.names },
-        makeCommand('docker-compose', `scale ${line.app}=0`, 'stop'),
-        makeCommand('restart', line.app, '(re)start'),
-        makeCommand('docker-compose', `pull ${line.app}`, 'pull'),
+        makeCommand([`docker-compose pull ${line.app}`], 'Pull'),
+        makeCommand([
+          `docker-compose scale ${line.app}=0`,
+          `docker-compose scale ${line.app}=1`,
+        ], 'Restart'),
+        makeCommand([`docker-compose scale ${line.app}=0`], 'Stop'),
       ],
     };
   });
@@ -124,38 +139,18 @@ const generateMenu = async () => {
     bitbar.sep,
     { text: 'Refresh ♻️', refresh: true, terminal: false },
     bitbar.sep,
-    makeCommand('docker-compose', 'up -d --remove-orphans', '(re)load docker-compose.yml'),
-    makeCommand('docker-compose', 'kill'),
-    makeCommand('docker-compose', 'pull'),
-    bitbar.sep,
-    makeCommand('prune', '', 'Prune stack'),
-    bitbar.sep,
     header,
     ...conf,
+    bitbar.sep,
+    makeCommand(['docker-compose up -d --remove-orphans'], 'Restart all'),
+    makeCommand(['docker-compose kill'], 'Stop all'),
+    makeCommand(['docker-compose pull'], 'Pull all'),
+    makeCommand([
+      'docker container prune -f',
+      'docker volume prune -f',
+      'docker image prune -f',
+    ], 'Prune stack'),
   ]);
 }
 
-const start = async () => {
-  const command = process.argv[2];
-  const params = process.argv.slice(3).join(' ');
-  switch (command) {
-    case 'docker':
-      await docker(params);
-      break;
-    case 'docker-compose':
-      await dockerCompose(params);
-      break;
-    case 'restart':
-      await dockerCompose(`scale ${params}=0`);
-      await dockerCompose(`scale ${params}=1`);
-      break;
-    case 'prune':
-      await docker('container prune -f');
-      await docker('volume prune -f');
-      await docker('image prune -f');
-      break;
-    default:
-      generateMenu();
-  }
-}
-start();
+generateMenu();

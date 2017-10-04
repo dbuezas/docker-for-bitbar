@@ -13,8 +13,9 @@
   "license": "ISC",
   "dependencies": {
     "bitbar": "^0.3.0",
-    "lodash": "^4.17.4",
-    "shellpromise": "^1.4.0",
+    "lodash": "^4.17.4"
+  },
+  "devDependencies" : {
     "eslint": "^4.7.0",
     "eslint-plugin-node": "^5.1.1"
   }
