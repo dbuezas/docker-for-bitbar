@@ -142,6 +142,7 @@ const generateMenu = async () => {
     header,
     ...conf,
     bitbar.sep,
+    makeCommand(['docker-compose logs --follow'], 'Logs'),
     makeCommand(['docker-compose up -d --remove-orphans'], 'Restart all'),
     makeCommand(['docker-compose kill'], 'Stop all'),
     makeCommand(['docker-compose pull'], 'Pull all'),
