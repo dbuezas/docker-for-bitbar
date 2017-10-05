@@ -45,21 +45,26 @@ const outputToArray = (out) => {
 }
 
 const getTable = async () => {
+  try {
   const psPromise = callDocker('ps', false);
-  const statsPromise = callDocker('stats --no-stream', false);
-  const out = outputToArray(await psPromise);
-  const stats = outputToArray(await statsPromise);
-  return _(out)
-    .map(obj => {
-      const stat = _.find(stats, { container: obj['container id'] }) || {};
-      return Object.assign(obj, {
-        cpu: stat['cpu %'] || '??',
-        ram: stat['mem %'] || '??',
-        app: obj.names.replace(/^[^_]+_(.+)_[\d]+$/g, '$1'), // stack_admin_1 => admin
+    const statsPromise = callDocker('stats --no-stream', false);
+    const out = outputToArray(await psPromise);
+    const stats = outputToArray(await statsPromise);
+    return _(out)
+      .map(obj => {
+        const stat = _.find(stats, { container: obj['container id'] }) || {};
+        return Object.assign(obj, {
+          cpu: stat['cpu %'] || '??',
+          ram: stat['mem %'] || '??',
+          app: obj.names.replace(/^[^_]+_(.+)_[\d]+$/g, '$1'), // stack_admin_1 => admin
+        })
       })
-    })
-    .sortBy('app')
-    .value();
+      .sortBy('app')
+      .value();
+    } catch (e) {
+      // docker was probably not started
+      return [];
+    }
 }
 
 const tab = (text, fillSpaces) => {
