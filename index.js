@@ -154,7 +154,7 @@ const generateMenu = async () => {
     makeCommand([
       'docker container prune -f',
       'docker volume prune -f',
-      'docker image prune -f',
+      'docker image prune -f --all',
     ], 'Prune'),
   ]);
 }
