@@ -74,6 +74,9 @@ const tab = (text, fillSpaces) => {
 };
 
 const makeCommand = (commands, text = '') => {
+  if (!Array.isArray(commands)) {
+    commands = [commands];
+  }
   const command = commands.map(c => `${dockerPath}/${c}`).join(' && ');
   let commandText = commands.join(' && ');
   if (commandText.length > 51) {
@@ -118,12 +121,12 @@ const generateMenu = async () => {
       color: (line.status.startsWith('Up') && line.cpu !== '??' )? 'green' : 'red',
       submenu: [
         { text: line.names },
-        makeCommand([`docker pull ${line.image}`], 'Pull'),
+        makeCommand(`docker pull ${line.image}`, 'Pull'),
         makeCommand([
-          `docker kill ${line['container id']}`,
+          `docker-compose scale ${line.app}=0`,
           `docker-compose scale ${line.app}=1`,
         ], 'Restart'),
-        makeCommand([`docker kill ${line['container id']}`], 'Kill'),
+        makeCommand(`docker kill ${line['container id']}`, 'Kill'),
       ],
     };
   });
@@ -147,10 +150,11 @@ const generateMenu = async () => {
     header,
     ...conf,
     bitbar.sep,
-    makeCommand(['docker-compose logs --follow'], 'Log all'),
-    makeCommand(['docker-compose up -d --remove-orphans'], 'Reload all'),
-    makeCommand(['docker-compose kill'], 'Kill all'),
-    makeCommand(['docker-compose pull'], 'Pull all'),
+    makeCommand('docker-compose logs --follow', 'Log all'),
+    makeCommand('docker-compose up -d --remove-orphans', 'Reload all'),
+    makeCommand('docker-compose kill', 'Kill all'),
+    makeCommand('docker-compose pull', 'Pull all'),
+    makeCommand('docker run -i --rm --privileged --pid=host debian nsenter -t 1 -m -u -n -i date -u $(date -u +\%m\%d\%H\%M\%Y)', 'Fix Dates'),
     makeCommand([
       'docker container prune -f',
       'docker volume prune -f',
